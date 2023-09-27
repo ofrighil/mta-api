@@ -13,8 +13,10 @@ class Entity(Enum):
 
 
 class Direction(Enum):
-    NORTH = 'NORTH'
-    SOUTH = 'SOUTH'
+    NORTH = 1
+    # EAST = 2
+    SOUTH = 3
+    # West = 4
 
 
 class TripDescriptor(BaseModel):
@@ -29,16 +31,29 @@ class NyctTripDescriptor(TripDescriptor):
     direction: Optional[Direction]
 
 
+class StopTimeUpdate(BaseModel):
+    stop_id: str
+    arrival: datetime
+    departure: datetime
+    #departure_occupancy_stats: str
+
+
+class NyctStopTimeUpdate(StopTimeUpdate):
+    scheduled_track: Optional[str]
+    actual_track: Optional[str]
+
+
 class TripUpdate(BaseModel):
     trip: NyctTripDescriptor
+    stop_time_update: tuple[NyctStopTimeUpdate, ...]
 
 
 def convert_trip_descriptor(
     trip_descriptor: gtfs_realtime_pb2.TripDescriptor
 ) -> NyctTripDescriptor:
-    nyct_trip_descriptor = trip_descriptor.Extensions[
-        nyct_subway_pb2.nyct_trip_descriptor
-    ]
+    nyct_trip_descriptor: nyct_subway_pb2.NyctTripDescriptor = \
+        trip_descriptor.Extensions[nyct_subway_pb2.nyct_trip_descriptor]
+
     if nyct_trip_descriptor.HasField('is_assigned'):
         is_assigned = nyct_trip_descriptor.is_assigned
     else:
@@ -69,9 +84,38 @@ def convert_trip_descriptor(
     )
 
 
+def convert_stop_time_update(
+    stop_time_update: gtfs_realtime_pb2.TripUpdate.StopTimeUpdate
+) -> NyctStopTimeUpdate:
+    nyct_stop_time_update: nyct_subway_pb2.NyctStopTimeUpdate = \
+        stop_time_update.Extensions[nyct_subway_pb2.nyct_stop_time_update]
+
+    if nyct_stop_time_update.HasField('scheduled_track'):
+        scheduled_track = nyct_stop_time_update.scheduled_track
+    else:
+        scheduled_track = None
+
+    if nyct_stop_time_update.HasField('actual_track'):
+        actual_track = nyct_stop_time_update.actual_track
+    else:
+        actual_track = None
+
+
+    return NyctStopTimeUpdate(
+        stop_id=stop_time_update.stop_id,
+        arrival=datetime.fromtimestamp(stop_time_update.arrival.time),
+        departure=datetime.fromtimestamp(stop_time_update.departure.time),
+        scheduled_track=scheduled_track,
+        actual_track=actual_track
+    )
+
+
 def convert_trip_update(
-        trip_update: gtfs_realtime_pb2.TripUpdate
+    trip_update: gtfs_realtime_pb2.TripUpdate
 ) -> TripUpdate:
     return TripUpdate(
         trip=convert_trip_descriptor(trip_update.trip),
+        stop_time_update=tuple(
+            map(convert_stop_time_update, trip_update.stop_time_update)
+        )
     )
