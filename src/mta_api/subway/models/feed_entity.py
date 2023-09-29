@@ -6,7 +6,7 @@ from pydantic import BaseModel
 
 from mta_api.gtfs import gtfs_realtime_pb2, nyct_subway_pb2
 
-class Entity(Enum):
+class FeedEntity(Enum):
     Alert = 'alert'
     TripUpdate = 'trip_update'
     Vehicle = 'vehicle'
